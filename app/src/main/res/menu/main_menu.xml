@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+      xmlns:tools="http://schemas.android.com/tools"
+      tools:context="slnkota.spectralink.com.createmenufromandroidstudio.MainActivity">
+    <item
+            android:id="@+id/select_teams"
+            android:orderInCategory="100"
+            android:title="@string/check_list" />
+
+</menu>

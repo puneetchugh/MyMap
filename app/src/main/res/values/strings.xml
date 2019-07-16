@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">MyMap</string>
+    <string name="cancel">Cancel</string>
+    <string name="location_permission_string">Enable location permission ?</string>
+    <string name="ok">Ok</string>
+    <string name="pins_list">Location list</string>
+    <string name="no_data">Data not available !</string>
+    <string name="enable_loc_perm">Enable location permission !</string>
+    <string name="your_location">You</string>
+    <string name="check_list">Check List</string>
+    <string name="locations">Locations</string>
+</resources>
