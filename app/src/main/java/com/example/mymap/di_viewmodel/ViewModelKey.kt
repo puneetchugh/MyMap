@@ -3,7 +3,6 @@ package com.example.mymap.di_viewmodel
 import androidx.lifecycle.ViewModel
 import dagger.MapKey
 import java.lang.annotation.Documented
-import java.lang.annotation.ElementType
 import kotlin.reflect.KClass
 
 @Target(AnnotationTarget.FUNCTION,

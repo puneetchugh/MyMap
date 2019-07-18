@@ -9,4 +9,7 @@
     <string name="your_location">You</string>
     <string name="check_list">Check List</string>
     <string name="locations">Locations</string>
+    <string name="location_permission_not_granted">Location permission not granted</string>
+    <string name="location_permission_explanation">You need to grant location permission to see your location</string>
+    <string name="issue_with_map">There\'s some issue with the map</string>
 </resources>

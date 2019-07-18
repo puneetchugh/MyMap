@@ -2,7 +2,7 @@ package com.example.mymap.di
 
 import android.app.Activity
 import android.app.Application
-import com.example.mymap.DaggerAppComponent
+import com.example.mymap.di.component.DaggerAppComponent
 import dagger.android.AndroidInjector
 import dagger.android.DispatchingAndroidInjector
 import dagger.android.HasActivityInjector

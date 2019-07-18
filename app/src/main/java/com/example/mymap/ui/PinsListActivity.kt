@@ -1,20 +1,22 @@
 package com.example.mymap.ui
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.mymap.viewmodels.PinsListActivityViewModel
 import com.example.mymap.R
 import com.example.mymap.model.data.model
 import com.example.mymap.ui.adapter.PinListAdapter
+import com.example.mymap.viewmodels.PinsListActivityViewModel
 import com.google.android.material.snackbar.Snackbar
 import dagger.android.AndroidInjection
+import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.activity_pins_list.*
+import kotlinx.android.synthetic.main.activity_pins_list.status_message
 import javax.inject.Inject
 
 class PinsListActivity : AppCompatActivity() {
@@ -67,5 +69,17 @@ class PinsListActivity : AppCompatActivity() {
         val snack = Snackbar.make( pins_list_activity_id, message,
             Snackbar.LENGTH_LONG)
         snack.show()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        mapView?.onStart()
+        pinsListActivityViewModel.getAllPinsList().takeIf{!it.isEmpty() }
+            ?.let {showPinsList(it) }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        recycler_view.adapter = null
     }
 }

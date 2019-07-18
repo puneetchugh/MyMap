@@ -1,228 +1,99 @@
 package com.example.mymap.ui
 
-import android.Manifest
-import android.annotation.SuppressLint
 import android.app.AlertDialog
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.location.Criteria
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
+import android.graphics.Color
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import androidx.core.app.ActivityCompat
-import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
-import androidx.core.content.ContextCompat
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ImageView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.TooltipCompat
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.example.mymap.R
-import com.example.mymap.constant.*
+import com.example.mymap.constant.ACURACY_ALPHA
+import com.example.mymap.constant.ELEVATION
+import com.example.mymap.constant.LOG_TAG
+import com.example.mymap.constant.MAP_ZOOM
 import com.example.mymap.model.data.model
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.*
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MarkerOptions
+import com.example.mymap.viewmodels.MainActivityViewModel
 import com.google.android.material.snackbar.Snackbar
+import com.mapbox.android.core.permissions.PermissionsListener
+import com.mapbox.android.core.permissions.PermissionsManager
+import com.mapbox.mapboxsdk.Mapbox
+import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions
+import com.mapbox.mapboxsdk.location.LocationComponentOptions
+import com.mapbox.mapboxsdk.location.modes.CameraMode
+import com.mapbox.mapboxsdk.location.modes.RenderMode
+import com.mapbox.mapboxsdk.maps.MapboxMap
+import com.mapbox.mapboxsdk.maps.OnMapReadyCallback
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.plugins.markerview.MarkerView
+import com.mapbox.mapboxsdk.plugins.markerview.MarkerViewManager
 import dagger.android.AndroidInjection
 import kotlinx.android.synthetic.main.activity_main.*
-import com.example.mymap.viewmodels.MainActivityViewModel
-import java.lang.Exception
 import javax.inject.Inject
 
 class MainActivity : AppCompatActivity(),
                      OnMapReadyCallback,
-                     LocationListener{
+                     PermissionsListener {
 
+
+    private var permisionsManager : PermissionsManager = PermissionsManager(this)
+    lateinit var map : MapboxMap
+    lateinit var markerViewManager : MarkerViewManager
     @Inject
     internal lateinit var viewModelFactory: ViewModelProvider.Factory
 
     lateinit var mainActivityViewModel: MainActivityViewModel
 
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-
-    private lateinit var map: GoogleMap
-
+    //observer for observing database changes and then reflecting
+    //those changes on the UI
     val pinsObserver = Observer<List<model.Pin>>{ list ->
-        list?.takeIf { !it.isEmpty() }
-            ?.let {markMapPins(it) }
-    }
+        list?.takeIf { !it.isEmpty() && ::map.isInitialized }
+            ?.let (::displayPinLocations) }
 
     val errorObserver = Observer<String>{ value ->
         if(value != null && !value.isBlank()){
             showSnackbarMessage(this@MainActivity.resources.getString(R.string.no_data))
-        }
-    }
+            mapView?.visibility = View.GONE
+            status_message.visibility = View.VISIBLE
+        } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Mapbox.getInstance(this,"pk.eyJ1IjoicHVuZWV0Y2h1Z2giLCJhIjoiY2p5NXp0aWVrMDhlejNicGpidXhlbzg0dyJ9.32BqnT0YInxYk4uUfA9VNQ")
         setContentView(R.layout.activity_main)
-        supportActionBar?.title = resources.getString(R.string.locations)
+        title = resources.getString(R.string.locations)
         AndroidInjection.inject(this)
+
+        mapView.onCreate(savedInstanceState)
+        mapView.getMapAsync(this)
 
         mainActivityViewModel = ViewModelProviders.of(this, viewModelFactory).get(MainActivityViewModel::class.java)
 
-        val mapFragment : SupportMapFragment? = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
-        mapFragment?.getMapAsync(this)
-
-        checkLocationPermission()
-
-        mainActivityViewModel.getAllPinsList().takeIf{!it.isEmpty() }
-            ?.let {markMapPins(it) }
-
         mainActivityViewModel.errorMessage.observe(this, errorObserver)
         mainActivityViewModel.getAllPinsLiveData().observe(this, pinsObserver)
+
     }
 
-    override fun onMapReady(googleMap: GoogleMap?) {
-        if(googleMap == null)
-            Log.e(LOG_TAG, "googleMap is null")
-        map = googleMap ?: return
-    }
+    override fun onMapReady(mapBox : MapboxMap) {
+        map = if (mapBox != null) mapBox else return
 
-    private fun isAboveMarshmallow(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-    }
-
-    private fun markMapPins(pinsList : List<model.Pin>) {
-        var counter = 0
-        if (::map.isInitialized) {
-            pinsList.forEach {
-                map.addMarker(MarkerOptions().position(LatLng(it.latitude, it.longitude)).title(it.name))
-                if (counter == 0)
-                    map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude),
-                        MAP_ZOOM
-                    ))
-                Log.d(LOG_TAG, "location : " + it.name)
-                counter++
-            }
+        //map.setStyle(Style.Builder().fromUri("mapbox://styles/mapbox/cjerxnqt3cgvp2rmyuxbeqme7")){
+        map.setStyle(Style.MAPBOX_STREETS){
+            enableLocationComponent(it)
         }
-    }
-
-    //suppressing missing permission as this method is only called
-    //if the app has location permission granted
-    @SuppressLint("MissingPermission")
-    private fun getUserLoc() {
-        Log.d(LOG_TAG, "getUserLoc() called")
-
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        fusedLocationClient.lastLocation
-            .addOnSuccessListener { location : Location? ->
-                // Got last known location. In some rare situations this can be null.
-                location?.let { onLocationChanged(it) }
-            }
-
-
-        val locationManager : LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val criteria : Criteria = Criteria()
-
-        val providerString = locationManager.getBestProvider(criteria, false)
-
-        if(providerString != null && !providerString.isBlank() && isLocationPermissionEnabled()){
-            val location = locationManager.getLastKnownLocation(providerString)
-            locationManager.requestLocationUpdates(providerString, MIN_TIME, MIN_DISTANCE, this)
-
-            if(location != null) onLocationChanged(location) else return
-        }
-    }
-
-    private fun checkLocationPermission(){
-        if(isAboveMarshmallow()){
-            when{
-                isLocationPermissionEnabled() -> getUserLoc()
-                shouldShowRequestPermissionRationale(this,
-                    Manifest.permission.ACCESS_FINE_LOCATION) -> displayRationale()
-                else -> {
-                    requestLocationPermission()
-                }
-            }
-        }
-        else{
-            requestLocationPermission()
-        }
-    }
-
-    private fun requestLocationPermission() {
-        ActivityCompat.requestPermissions(this,
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-            LOCATION_PERMISSION
-        )
-    }
-
-    private fun displayRationale() {
-        AlertDialog.Builder(this)
-            .setMessage(getString(R.string.location_permission_string))
-            .setPositiveButton(getString(R.string.ok)
-            ) { _, _ -> requestLocationPermission() }
-            .setNegativeButton(getString(R.string.cancel)
-            ) { _, _ -> }
-            .show()
-    }
-
-    private fun isLocationPermissionEnabled(): Boolean {
-        return ContextCompat.checkSelfPermission(this,
-            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,
-                                            grantResults: IntArray) {
-        when (requestCode) {
-            LOCATION_PERMISSION -> {
-                if (permissions.size != 1 || grantResults.size != 1) {
-                    throw RuntimeException("Error on requesting location permission.")
-                }
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    getUserLoc()
-                } else {
-                    showSnackbarMessage(resources.getString(R.string.enable_loc_perm))
-                }
-            }
-        }
-    }
-
-    override fun onLocationChanged(location: Location?) {
-        Log.d(LOG_TAG, String.format("New loc : (%f,%f)",location?.latitude, location?.longitude))
-        location?.let { selfLocationMarker(it) }
-    }
-
-    override fun onStatusChanged(p0: String?, p1: Int, p2: Bundle?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun onProviderEnabled(p0: String?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun onProviderDisabled(p0: String?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    private fun showSnackbarMessage(message : String){
-        val snack = Snackbar.make( main_activity_id, message,
-            Snackbar.LENGTH_LONG)
-        snack.show()
-    }
-
-    private fun selfLocationMarker(location: Location?){
-        Log.d(LOG_TAG, "selfLocationMarker() called")
-        try {
-            map.addMarker(MarkerOptions().position(LatLng(location!!.latitude, location!!.longitude))
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA)).title(resources.getString(
-                    R.string.your_location
-                )))
-            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(location.latitude, location.longitude),
-                MAP_ZOOM
-            ))
-        }
-        catch (exception : Exception){}
+        Log.d(LOG_TAG, "Inside onMapReady() .... map : "+map)
+        markerViewManager = MarkerViewManager(mapView, map)
+        mainActivityViewModel.getAllPinsList().takeIf{!it.isEmpty() && ::map.isInitialized }
+            ?.let (::displayPinLocations)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -239,5 +110,137 @@ class MainActivity : AppCompatActivity(),
             return true
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    public override fun onResume() {
+        super.onResume()
+        mapView?.onResume()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        mapView?.onStart()
+        Log.d(LOG_TAG, "onStart() called ..")
+        mainActivityViewModel.getAllPinsList()
+            .takeIf{!it.isEmpty() && ::map.isInitialized }
+            ?.let (::displayPinLocations)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        mapView?.onStop()
+    }
+
+    public override fun onPause() {
+        super.onPause()
+        mapView?.onPause()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView?.onLowMemory()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mapView?.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        mapView?.onSaveInstanceState(outState)
+    }
+
+    @SuppressWarnings("MissingPermission")
+    private fun enableLocationComponent(style: Style) {
+
+        if(PermissionsManager.areLocationPermissionsGranted(this)){
+
+            if (!::map.isInitialized || map.style == null){
+                Log.e(LOG_TAG, "map isn't initialized yet..returning")
+                showSnackbarMessage(resources.getString(R.string.issue_with_map))
+                return
+            }
+
+            val customLocationComponentOptions = LocationComponentOptions.builder(this)
+                .foregroundDrawable(R.drawable.mapbox_mylocation_icon_bearing)
+                .trackingGesturesManagement(true)
+                .elevation(ELEVATION)
+                .accuracyAlpha(ACURACY_ALPHA)
+                .accuracyColor(Color.GRAY)
+                .build()
+
+            val locationComponentActivationOptions = LocationComponentActivationOptions.builder(this, style)
+                .locationComponentOptions(customLocationComponentOptions)
+                .useDefaultLocationEngine(true)
+                .build()
+
+            map.locationComponent.apply{
+                activateLocationComponent(locationComponentActivationOptions)
+                isLocationComponentEnabled = true
+                cameraMode = CameraMode.TRACKING
+                renderMode = RenderMode.COMPASS
+            }
+        } else {
+            permisionsManager = PermissionsManager(this)
+            permisionsManager.requestLocationPermissions(this)
+        }
+    }
+
+
+    private fun displayPinLocations(pinsList : List<model.Pin>){
+        mapView?.visibility = View.VISIBLE
+        status_message.visibility = View.GONE
+        Log.d(LOG_TAG, "displayPinLocations() called, with pinsList : "+pinsList)
+       pinsList.forEach {pin ->
+            val imageView =  ImageView(this@MainActivity)
+            imageView.setImageResource(R.drawable.mapbox_markerview_icon_default)
+            imageView.layoutParams = FrameLayout.LayoutParams(128, 128)
+
+            val cameraPosition = com.mapbox.mapboxsdk.camera.CameraPosition.Builder()
+                .target(com.mapbox.mapboxsdk.geometry.LatLng(pin.latitude, pin.longitude))
+                .zoom(MAP_ZOOM.toDouble())
+                .build()
+            TooltipCompat.setTooltipText(imageView, pin.name)
+            markerViewManager?.addMarker(MarkerView(com.mapbox.mapboxsdk.geometry.LatLng(pin.latitude, pin.longitude),imageView))
+            map.cameraPosition = cameraPosition }
+    }
+
+    private fun isAboveMarshmallow(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+    }
+
+    private fun displayRationale() {
+        AlertDialog.Builder(this)
+            .setMessage(getString(R.string.location_permission_string))
+            .setPositiveButton(getString(R.string.ok)
+            ) { _, _ -> run{
+                permisionsManager = PermissionsManager(this)
+                permisionsManager.requestLocationPermissions(this)
+            } }
+            .show()
+    }
+
+    private fun showSnackbarMessage(message : String){
+        val snack = Snackbar.make( main_activity_id, message,
+            Snackbar.LENGTH_LONG)
+        snack.show()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        permisionsManager.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    override fun onExplanationNeeded(permissionsToExplain: MutableList<String>?) {
+        showSnackbarMessage(resources.getString(R.string.location_permission_explanation))
+    }
+
+    override fun onPermissionResult(granted: Boolean) {
+        Log.d(LOG_TAG, "onPermissionResult called ... with permission granted ? "+granted)
+        if(granted)
+            enableLocationComponent(map.style!!)
+        else
+            showSnackbarMessage(String.format("%s.\n%s",resources.getString(R.string.location_permission_not_granted)
+                    ,resources.getString(R.string.location_permission_explanation)))
     }
 }

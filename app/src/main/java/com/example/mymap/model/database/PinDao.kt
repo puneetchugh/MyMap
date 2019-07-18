@@ -3,7 +3,6 @@ package com.example.mymap.model.database
 import androidx.lifecycle.LiveData
 import androidx.room.*
 import com.example.mymap.model.data.model
-import io.reactivex.Observable
 
 @Dao
 interface PinDao{
