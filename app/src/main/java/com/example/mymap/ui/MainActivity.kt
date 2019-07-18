@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
@@ -17,10 +18,7 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.example.mymap.R
-import com.example.mymap.constant.ACURACY_ALPHA
-import com.example.mymap.constant.ELEVATION
-import com.example.mymap.constant.LOG_TAG
-import com.example.mymap.constant.MAP_ZOOM
+import com.example.mymap.constant.*
 import com.example.mymap.model.data.model
 import com.example.mymap.viewmodels.MainActivityViewModel
 import com.google.android.material.snackbar.Snackbar
@@ -120,6 +118,10 @@ class MainActivity : AppCompatActivity(),
     override fun onStart() {
         super.onStart()
         mapView?.onStart()
+
+        if(!isNetworkConnected(this))
+            showSnackbarMessage(resources.getString(R.string.network_not_avail))
+
         Log.d(LOG_TAG, "onStart() called ..")
         mainActivityViewModel.getAllPinsList()
             .takeIf{!it.isEmpty() && ::map.isInitialized }
@@ -189,13 +191,16 @@ class MainActivity : AppCompatActivity(),
 
 
     private fun displayPinLocations(pinsList : List<model.Pin>){
+        if(!isNetworkConnected(this))
+            showSnackbarMessage(resources.getString(R.string.network_not_avail))
+
         mapView?.visibility = View.VISIBLE
         status_message.visibility = View.GONE
         Log.d(LOG_TAG, "displayPinLocations() called, with pinsList : "+pinsList)
        pinsList.forEach {pin ->
             val imageView =  ImageView(this@MainActivity)
             imageView.setImageResource(R.drawable.mapbox_markerview_icon_default)
-            imageView.layoutParams = FrameLayout.LayoutParams(128, 128)
+            imageView.layoutParams = FrameLayout.LayoutParams(128, 128) as ViewGroup.LayoutParams?
 
             val cameraPosition = com.mapbox.mapboxsdk.camera.CameraPosition.Builder()
                 .target(com.mapbox.mapboxsdk.geometry.LatLng(pin.latitude, pin.longitude))

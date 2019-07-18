@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.mymap.R
+import com.example.mymap.constant.isNetworkConnected
 import com.example.mymap.model.data.model
 import com.example.mymap.ui.adapter.PinListAdapter
 import com.example.mymap.viewmodels.PinsListActivityViewModel
@@ -57,6 +58,9 @@ class PinsListActivity : AppCompatActivity() {
     }
 
     private fun showPinsList(pinsList : List<model.Pin>){
+        if(!isNetworkConnected(this))
+            showSnackbarMessage(resources.getString(R.string.network_not_avail))
+
         if(!pinsList.isEmpty()){
             recycler_view.visibility = View.VISIBLE
             status_message.visibility = View.GONE
@@ -74,6 +78,10 @@ class PinsListActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         mapView?.onStart()
+
+        if(!isNetworkConnected(this))
+            showSnackbarMessage(resources.getString(R.string.network_not_avail))
+
         pinsListActivityViewModel.getAllPinsList().takeIf{!it.isEmpty() }
             ?.let {showPinsList(it) }
     }
